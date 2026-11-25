@@ -1,0 +1,99 @@
+services:
+  php-app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: php_admin_product_app
+    ports:
+      - "8090:80"
+    volumes:
+      - ./app:/var/www/html
+    env_file:
+      - .env
+    depends_on:
+      - mysql
+    networks:
+      - admin_product_network
+
+  mysql:
+    image: mysql:8.0
+    container_name: php_admin_product_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_admin_product_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - admin_product_network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: php_admin_product_phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+    ports:
+      - "8091:80"
+    depends_on:
+      - mysql
+    networks:
+      - admin_product_network
+
+  ai-worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: php_admin_product_ai_worker
+    restart: unless-stopped
+    command: php /var/www/html/bin/ai_worker.php
+    volumes:
+      - ./app:/var/www/html
+    env_file:
+      - .env
+    depends_on:
+      - mysql
+      - rabbitmq
+      - ollama
+    networks:
+      - admin_product_network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: php_admin_product_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - admin_product_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: php_admin_product_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - admin_product_network
+
+volumes:
+  mysql_admin_product_data:
+  ollama_data:
+  rabbitmq_data:
+
+networks:
+  admin_product_network:
+    driver: bridge
